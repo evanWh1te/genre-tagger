@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genre-tagger"
+version = "0.1.0"
+description = "Artist-level genre tagging for a FLAC/MP3/WAV library using MusicBrainz, Discogs and Last.fm"
+requires-python = ">=3.11"
+dependencies = ["mutagen>=1.47"]
+
+[project.scripts]
+genre-tagger = "genre_tagger.cli:main"
+
+[tool.setuptools]
+packages = ["genre_tagger"]
+
+[tool.setuptools.package-data]
+genre_tagger = ["data/*.txt"]
