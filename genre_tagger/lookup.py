@@ -9,6 +9,9 @@ Identity rules, so nothing is guessed:
     name match) are looked up by that identity everywhere
   - a name with several exact MusicBrainz matches is ambiguous: no source is
     queried and the artist goes to the review file until it is pinned
+  - a credit MusicBrainz does not know that names several artists
+    ("Turnstile & BADBADNOTGOOD") is identified by its first artist, by the
+    same exact-name/evidence rules
   - a name MusicBrainz does not know is still tried on Discogs (exact unique
     name match) and Last.fm; resolve only accepts it with a Discogs match
 Every response, including "not found", is cached; a re-run makes no calls
@@ -17,6 +20,7 @@ for anything already cached.
 import collections
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -24,6 +28,9 @@ import time
 from . import db as dbm
 from . import tags
 from .sources import Discogs, LastFM, MusicBrainz, SourceError
+
+# "A & B", "A x B", "A, B", "A vs. B", "A with B": credits naming several artists
+COLLAB_RE = re.compile(r'\s+(?:&|and|x|×|vs\.?|with)\s+|\s*,\s+', re.I)
 
 
 def cached(db, key, source):
@@ -95,6 +102,7 @@ def run(settings, artists, sources=('musicbrainz', 'discogs', 'lastfm')):
         print('note: GT_CONTACT not set; MusicBrainz asks for contact info in the User-Agent')
 
     mb_done = threading.Event()
+    mb_seen = set()  # artists the MusicBrainz step has finished with this run
     counts = {s: collections.Counter() for s in sources}
     errors = collections.Counter()
 
@@ -116,6 +124,19 @@ def run(settings, artists, sources=('musicbrainz', 'discogs', 'lastfm')):
                 albums, titles = evidence_for(db, settings, a['key'])
                 store(db, a['key'], 'mb_search', *mb.disambiguate(a['name'], s[1]['candidates'], albums, titles))
                 calls += 1
+            first = COLLAB_RE.split(a['name'])[0].strip()
+            if s[0] == 'notfound' and 'first_artist' not in s[1] and first and first != a['name']:
+                # "Turnstile & BADBADNOTGOOD": no such artist, so use the first credited one
+                f = mb.search(first)
+                calls += 1
+                if f[0] == 'ambiguous':
+                    albums, titles = evidence_for(db, settings, a['key'])
+                    f = mb.disambiguate(first, f[1]['candidates'], albums, titles)
+                    calls += 1
+                store(db, a['key'], 'mb_search', f[0], {**f[1], 'first_artist': first})
+                if f[0] == 'ok':  # Discogs/Last.fm were looked up under the full credit
+                    db.execute("DELETE FROM cache WHERE artist_key=? AND source IN ('discogs','lastfm')", (a['key'],))
+                    db.commit()
         kind, mbid = identity(db, a)
         if kind == 'mbid' and cached(db, a['key'], 'musicbrainz') is None:
             store(db, a['key'], 'musicbrainz', *mb.artist(mbid))
@@ -149,6 +170,8 @@ def run(settings, artists, sources=('musicbrainz', 'discogs', 'lastfm')):
         while pending:
             progressed = False
             for a in list(pending):
+                if ready and mb_planned and a['key'] not in mb_seen:
+                    continue  # its identity (and so its cache) may still change
                 if cache_source and cached(db, a['key'], cache_source) is not None:
                     pending.remove(a)
                     counts[source]['cached'] += 1
@@ -157,6 +180,8 @@ def run(settings, artists, sources=('musicbrainz', 'discogs', 'lastfm')):
                     continue
                 try:
                     counts[source][step(db, a)] += 1
+                    if source == 'musicbrainz':
+                        mb_seen.add(a['key'])
                 except SourceError as e:
                     errors[source] += 1
                     print(f'[{source}] {a["name"]}: {e}', file=sys.stderr, flush=True)
@@ -177,7 +202,8 @@ def run(settings, artists, sources=('musicbrainz', 'discogs', 'lastfm')):
     lf = LastFM(settings.lastfm_key, ua) if 'lastfm' in sources else None
 
     plan = []
-    if 'musicbrainz' in sources:
+    mb_planned = 'musicbrainz' in sources
+    if mb_planned:
         plan.append(('musicbrainz', mb_step, None, None))
     else:
         mb_done.set()
