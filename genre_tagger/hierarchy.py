@@ -36,6 +36,9 @@ ALIASES = {
     'originalsoundtrack': 'Soundtrack', 'videogamesoundtrack': 'Video Game Music',
     'gamesoundtrack': 'Video Game Music', 'videogame': 'Video Game Music', 'electronica': 'Electronic',
     'nwobhm': 'New Wave of British Heavy Metal', 'singerandsongwriter': 'Singer-Songwriter',
+    'drumcorps': 'Drum and Bugle Corps', 'dci': 'Drum and Bugle Corps',
+    'romantic': 'Romanticism', 'romanticclassical': 'Romanticism', 'romanticera': 'Romanticism',
+    'glam': 'Glam Rock', 'jazzyhiphop': 'Jazz Rap', 'jazzhiphop': 'Jazz Rap', 'chillhop': 'Lo-Fi Hip Hop',
 }
 # for a bracketed name, what to write instead (RYM tags releases with the leaf)
 BRACKET_DISPLAY = {'Hardcore [Punk]': 'Hardcore Punk'}
