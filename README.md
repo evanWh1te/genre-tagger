@@ -74,9 +74,15 @@ $gt rollback                       # dry run
 $gt rollback --apply               # restore originals
 ```
 
-Scope flags for `lookup` / `resolve`: `--include-multi` (also artists that
-already have 2+ genres), `--limit N` (first N artists by name), `--artist TEXT`.
-`apply` takes `--artist` and `--limit`; `rollback` takes `--artist`.
+Default scope is judged per track: an artist is in scope when any of its
+tracks has 0-1 genres (or the tool has written to it before), and `apply`
+writes only those 0-1 genre tracks plus the tool's own earlier writes. Tracks
+you already gave 2+ genres are left alone.
+
+Scope flags for `lookup` / `resolve`: `--include-multi` (also artists whose
+tracks all have 2+ genres), `--limit N` (first N artists by name), `--artist TEXT`.
+`apply` takes `--artist`, `--limit` and `--include-multi` (also overwrite
+tracks with 2+ genres); `rollback` takes `--artist`.
 `apply` writes whatever the most recent `resolve` produced.
 
 ### Testing on a subset
@@ -118,8 +124,13 @@ Name-only artists are searched on MusicBrainz by **exact** name or alias:
   appearances)
 - still ambiguous: no source is queried; the artist goes to the review file with
   the candidates listed. Pin the right one with `override set "Name" --mbid <id>`.
+- no match for a credit naming several artists (`A & B`, `A x B`, `A, B`,
+  `A vs. B`, `A with B`): the first artist is identified by the same rules
 - no match: Discogs (exact, unique name) and Last.fm are tried; resolve only
   accepts the result if Discogs found a unique exact match.
+
+The existing-genre signal uses each track's original genre when the tool has
+written it, so the tool's own output never counts as evidence.
 
 ## How genres are chosen
 

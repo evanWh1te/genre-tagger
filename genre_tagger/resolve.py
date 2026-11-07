@@ -51,14 +51,20 @@ def mb_genre_names(db):
 
 
 def track_genres(db):
-    """artist_key -> (n tracks, Counter of genre -> n tracks having it, [genre lists])"""
+    """artist_key -> (n tracks, Counter of genre -> n tracks having it,
+    [(current genre list, written by this tool)]).
+    The Counter (the 'existing' signal) uses a track's original genre when this
+    tool wrote it, so earlier output never feeds back in as evidence."""
     out = collections.defaultdict(lambda: [0, collections.Counter(), []])
-    for key, g in db.execute("SELECT artist_key, genre FROM tracks WHERE artist_key IS NOT NULL"):
-        g = loads(g)
+    for key, g, orig, wrote in db.execute(
+            """SELECT t.artist_key, t.genre, o.genre, w.relpath FROM tracks t
+               LEFT JOIN writes w ON w.relpath = t.relpath
+               LEFT JOIN originals o ON o.relpath = t.relpath
+               WHERE t.artist_key IS NOT NULL"""):
         e = out[key]
         e[0] += 1
-        e[2].append(g)
-        for x in split_genres(g):
+        e[2].append((loads(g), wrote is not None))
+        for x in split_genres(loads(orig if wrote is not None else g)):
             e[1][x] += 1
     return out
 
@@ -174,7 +180,9 @@ def resolve(db, settings, artists):
         bad = [g for g in genres if FORBIDDEN & set(g)]
         if bad:
             genres, status, reason = [], 'review', f'separator in genre name {bad}'
-        n_change = sum(1 for g in ex[2] if g != genres) if genres else 0
+        # what a default-scope apply would rewrite: 0-1 genre tracks and this tool's own writes
+        n_change = sum(1 for g, wrote in ex[2]
+                       if g != genres and (wrote or len(split_genres(g)) <= 1)) if genres else 0
         results.append({**a, 'genres': genres, 'scores': dict(scores), 'status': status, 'reason': reason,
                         'contrib': dict(contrib), 'n_change': n_change,
                         'dropped': {g: s for g, s in dropped.items() if s >= settings.min_score}})

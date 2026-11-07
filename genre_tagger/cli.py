@@ -18,7 +18,8 @@ from .config import settings as load_settings
 
 def _scope_args(p):
     p.add_argument('--include-multi', action='store_true',
-                   help='also process artists that already have 2+ genres (default: only 0-1)')
+                   help='also process artists whose tracks all have 2+ genres '
+                        '(default: artists with any track holding 0-1)')
     p.add_argument('--limit', type=int, help='only the first N artists (by name), for testing')
     p.add_argument('--artist', help='only artists whose name contains this text (or exact artist key)')
 
@@ -96,7 +97,7 @@ def _run(s, db, a, targets, kind):
 def cmd_apply(s, db, a):
     if not db.execute("SELECT 1 FROM resolved LIMIT 1").fetchone():
         sys.exit('nothing resolved yet: run resolve first')
-    _run(s, db, a, ap.apply_targets(db, a.artist, a.limit), 'apply')
+    _run(s, db, a, ap.apply_targets(db, a.artist, a.limit, a.include_multi), 'apply')
 
 
 def cmd_rollback(s, db, a):
@@ -174,6 +175,8 @@ def main(argv=None):
     x.add_argument('--apply', action='store_true', help='actually write files')
     x.add_argument('--artist')
     x.add_argument('--limit', type=int, help='only the first N artists')
+    x.add_argument('--include-multi', action='store_true',
+                   help='also overwrite tracks that already have 2+ genres (default: only 0-1)')
     x.set_defaults(fn=cmd_apply)
 
     x = sub.add_parser('rollback', help='restore original genres (dry run unless --apply)')

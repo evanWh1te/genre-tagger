@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import tags
 from .db import dumps, loads, now
+from .scan import sparse
 
 
 def _undo(path, backup, before):
@@ -46,11 +47,12 @@ def marker_value(status, when=None):
     return f"{time.strftime('%Y-%m-%d', time.localtime(when))} {'override' if status == 'override' else 'auto'}"
 
 
-def apply_targets(db, artist_filter=None, limit=None):
+def apply_targets(db, artist_filter=None, limit=None, include_multi=False):
     """(relpath, target genres, artist name, current genres, target marker) for
     tracks whose genre differs from the resolved proposal, plus tracks this tool
     wrote before markers existed (marker only; dated by the original write).
-    Only artists with status ok/override are included."""
+    Only artists with status ok/override are included. Tracks already holding
+    2+ genres that this tool didn't write are left alone unless include_multi."""
     q = """SELECT t.relpath, t.genre, r.genres, r.status, a.name, a.key, w.genre, w.written_at, w.marker
            FROM tracks t
            JOIN resolved r ON r.artist_key = t.artist_key
@@ -66,6 +68,8 @@ def apply_targets(db, artist_filter=None, limit=None):
             if limit and len(keys_seen) >= limit:
                 break
             keys_seen.append(key)
+        if wrote is None and not include_multi and not sparse(cur):
+            continue
         target, cur = loads(target), loads(cur)
         if cur != target:
             out.append((rel, target, name, cur, marker_value(status)))

@@ -162,13 +162,24 @@ def assign_keys(db):
           f'{unkeyed} tracks with no artist tag')
 
 
+def sparse(genre_json):
+    """A track is in the default scope when it has at most one genre."""
+    return len(split_genres(json.loads(genre_json) if genre_json else None)) <= 1
+
+
 def select_artists(db, include_multi=False, limit=None, artist=None):
-    """Artists in scope, by name. Default scope: at most one current genre."""
+    """Artists in scope, by name. Default scope: artists with at least one
+    track holding 0-1 genres (judged per track: an artist whose albums carry
+    different single genres still has sparse tracks to fill), plus artists
+    this tool already wrote to, so they stay resolved."""
+    has_sparse = {k for k, g, w in db.execute(
+        """SELECT t.artist_key, t.genre, w.relpath FROM tracks t LEFT JOIN writes w ON w.relpath = t.relpath
+           WHERE t.artist_key IS NOT NULL""") if w is not None or sparse(g)}
     rows = db.execute("SELECT key, name, mbid, tracks, current FROM artists ORDER BY name COLLATE NOCASE").fetchall()
     out = []
     for key, name, mbid, n, current in rows:
         current = json.loads(current)
-        if not include_multi and len(current) > 1:
+        if not include_multi and key not in has_sparse:
             continue
         if artist and artist.casefold() not in (name or '').casefold() and artist != key:
             continue
