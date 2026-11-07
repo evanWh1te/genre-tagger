@@ -25,6 +25,7 @@ scan  ->  lookup  ->  resolve  ->  apply (dry run)  ->  apply --apply
 | `rollback` | dry run of restoring original genres | no |
 | `rollback --apply` | restores the original genres | **yes** |
 | `override` | manual genres, or pin the MusicBrainz artist for an ambiguous name | no |
+| `identities` | CSV of each artist's MusicBrainz identity and how it was established | no |
 | `status`   | counts from the state DB | no |
 
 Everything is resumable: `scan` re-reads only files whose size/mtime changed,
@@ -134,6 +135,15 @@ Name-only artists are searched on MusicBrainz by **exact** name or alias:
   `A vs. B`, `A with B`): the first artist is identified by the same rules
 - no match: Discogs (exact, unique name) and Last.fm are tried; resolve only
   accepts the result if Discogs found a unique exact match.
+
+`identities` exports what lookup settled on, for other tools (e.g. filling
+an artist's discography) to reuse without re-matching: `reports/identities-*.csv`
+with `status` (confirmed, ambiguous, not on musicbrainz, not looked up,
+stale mbid), `mbid`, `how` (tag, pinned, exact name, title evidence, first
+credited artist), the MusicBrainz name and disambiguation, the linked Discogs
+ID, and the candidates for ambiguous names. Lookup only covers artists in
+scope; `lookup --include-multi --sources musicbrainz` identifies the rest
+cheaply.
 
 The existing-genre signal uses each track's original genre when the tool has
 written it, so the tool's own output never counts as evidence.

@@ -132,6 +132,19 @@ def cmd_override(s, db, a):
     print(f'{a.action}: {name} [{key}]')
 
 
+def cmd_identities(s, db, a):
+    rows = lk.identities(db)
+    Path(s.reports).mkdir(parents=True, exist_ok=True)
+    path = Path(s.reports) / f'identities-{time.strftime("%Y%m%d-%H%M%S")}.csv'
+    with open(path, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ['artist'])
+        w.writeheader()
+        w.writerows(rows)
+    print(f'{len(rows)} artists: {dict(collections.Counter(r["status"] for r in rows))}')
+    print('confirmed by:', dict(collections.Counter(r['how'] for r in rows if r['status'] == 'confirmed')))
+    print(f'identities: {path}')
+
+
 def cmd_status(s, db, a):
     q = lambda sql: db.execute(sql).fetchall()
     print('library:', s.library, '| db:', s.db)
@@ -193,6 +206,9 @@ def main(argv=None):
     x.add_argument('--mbid', help='pin the MusicBrainz artist (for ambiguous names)')
     x.add_argument('--note')
     x.set_defaults(fn=cmd_override)
+
+    x = sub.add_parser('identities', help='export each artist\'s MusicBrainz identity (CSV), from cached lookups')
+    x.set_defaults(fn=cmd_identities)
 
     x = sub.add_parser('status', help='summary of the state database')
     x.set_defaults(fn=cmd_status)

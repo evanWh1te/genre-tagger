@@ -82,6 +82,52 @@ def identity(db, a):
     return 'unknown', None
 
 
+def identities(db):
+    """One row per artist: the MusicBrainz identity lookup settled on and how.
+    how: 'tag' (MBID in the files), 'pinned' (override), 'exact name' (the only
+    artist with that name/alias), 'title evidence' (the only candidate credited
+    on the library's albums/tracks), 'first credited artist' (for "A & B")."""
+    pins = {k for (k,) in db.execute("SELECT artist_key FROM overrides WHERE mbid IS NOT NULL")}
+    out = []
+    for key, name, mbid, n in db.execute("SELECT key, name, mbid, tracks FROM artists ORDER BY name COLLATE NOCASE"):
+        a = {'key': key, 'name': name, 'mbid': mbid}
+        kind, info = identity(db, a)
+        s = cached(db, key, 'mb_search')
+        row = {'artist': name, 'artist_key': key, 'tracks': n, 'status': kind, 'mbid': '', 'how': '',
+               'mb_name': '', 'mb_disambiguation': '', 'discogs_id': '', 'candidates': ''}
+        if kind == 'mbid':
+            row['status'], row['mbid'] = 'confirmed', info
+            if key in pins:
+                row['how'] = 'pinned'
+            elif mbid:
+                row['how'] = 'tag'
+            elif s and s[1].get('via') == 'evidence':
+                row['how'] = 'title evidence'
+            else:
+                row['how'] = 'exact name'
+            if s and s[1].get('first_artist') and row['how'] not in ('pinned', 'tag'):
+                row['how'] = f"first credited artist ({row['how']})"
+            mb = cached(db, key, 'musicbrainz')
+            if mb and mb[0] == 'ok':
+                row['mb_name'] = mb[1].get('name', '')
+                row['mb_disambiguation'] = mb[1].get('disambiguation', '')
+            elif mb and mb[0] == 'notfound':
+                row['status'] = 'stale mbid'  # tagged/pinned MBID that MusicBrainz no longer has
+            dg = cached(db, key, 'discogs')
+            if dg and dg[0] == 'ok' and dg[1].get('via') == 'musicbrainz':
+                row['discogs_id'] = dg[1].get('id', '')
+        elif kind == 'ambiguous':
+            row['candidates'] = ' | '.join(f"{c['id']} {c.get('name') or ''}"
+                                           + (f" ({c['disambiguation']})" if c.get('disambiguation') else '')
+                                           for c in info)
+        elif kind == 'unknown':
+            row['status'] = 'not on musicbrainz'
+        else:
+            row['status'] = 'not looked up'
+        out.append(row)
+    return out
+
+
 def mb_payload(db, a):
     kind, mbid = identity(db, a)
     if kind != 'mbid':
