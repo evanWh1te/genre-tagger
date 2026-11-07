@@ -147,6 +147,35 @@ def cmd_identities(s, db, a):
     print(f'identities: {path}')
 
 
+def cmd_candidates(s, db, a):
+    keys = [k for (k,) in db.execute("""SELECT r.artist_key FROM resolved r JOIN artists x ON x.key = r.artist_key
+                                         WHERE r.status = 'review' ORDER BY x.name COLLATE NOCASE""")]
+    if a.artist:
+        keys = [k for k in keys if a.artist.casefold() in k.casefold()]
+    rows = lk.candidates(db, s, keys)
+    reasons = dict(db.execute("SELECT artist_key, reason FROM resolved WHERE status='review'"))
+    Path(s.reports).mkdir(parents=True, exist_ok=True)
+    path = Path(s.reports) / f'candidates-{time.strftime("%Y%m%d-%H%M%S")}.md'
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('# Artists needing review\n\nPin a candidate: `override set "Artist" --mbid <mbid>`; '
+                'or set genres: `override set "Artist" --genres "A; B"`. Then lookup, resolve, apply.\n')
+        for r in rows:
+            f.write(f"\n## {r['artist']} ({r['tracks']} tracks)\n\n{reasons.get(r['key'], '')[:200]}\n\n"
+                    f"Local albums: {'; '.join(f'{t} ({n})' for t, n in r['local_albums'].items())}\n")
+            for c in r['candidates']:
+                f.write(f"\n- `{c['mbid']}` **{c['name']}**"
+                        + (f" ({c['disambiguation']})" if c['disambiguation'] else '')
+                        + f" — {c['type'] or '?'}, {c['country'] or '?'}, from {c['begin'] or '?'}; "
+                        f"genres: {c['genres'] or '–'}; {c['release_groups']} release groups"
+                        + (f"; **matches local: {'; '.join(c['matching_albums'])}**" if c['matching_albums'] else '')
+                        + f"\n  - e.g. {'; '.join(c['sample_titles']) or '–'}\n")
+    for r in rows:
+        hits = [c for c in r['candidates'] if c['matching_albums']]
+        print(f"{r['artist'][:30]:30} {r['tracks']:>4} tr | {len(r['candidates'])} candidates"
+              + (f" | album match: {', '.join(c['mbid'][:8] for c in hits)}" if hits else ''))
+    print(f'report: {path}')
+
+
 def cmd_status(s, db, a):
     q = lambda sql: db.execute(sql).fetchall()
     print('library:', s.library, '| db:', s.db)
@@ -208,6 +237,10 @@ def main(argv=None):
     x.add_argument('--mbid', help='pin the MusicBrainz artist (for ambiguous names)')
     x.add_argument('--note')
     x.set_defaults(fn=cmd_override)
+
+    x = sub.add_parser('candidates', help='report on review artists: local albums vs MusicBrainz candidates')
+    x.add_argument('--artist', help='only artists whose key contains this text')
+    x.set_defaults(fn=cmd_candidates)
 
     x = sub.add_parser('identities', help='export each artist\'s MusicBrainz identity (CSV), from cached lookups')
     x.set_defaults(fn=cmd_identities)

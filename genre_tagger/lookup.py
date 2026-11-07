@@ -27,7 +27,8 @@ import time
 
 from . import db as dbm
 from . import tags
-from .sources import Discogs, LastFM, MusicBrainz, SourceError
+from .scan import fold
+from .sources import Discogs, LastFM, MusicBrainz, SourceError, strip_edition
 
 # "A & B", "A x B", "A, B", "A vs. B", "A with B": credits naming several artists
 COLLAB_RE = re.compile(r'\s+(?:&|and|x|×|vs\.?|with)\s+|\s*,\s+', re.I)
@@ -125,6 +126,54 @@ def identities(db):
         else:
             row['status'] = 'not looked up'
         out.append(row)
+    return out
+
+
+def local_albums(db, settings, key):
+    """{album title: tracks} for an artist, read from all of its files."""
+    root = os.fsencode(str(settings.library)).rstrip(b'/')
+    albums = collections.Counter()
+    for (rel,) in db.execute("SELECT relpath FROM tracks WHERE artist_key=?", (key,)):
+        try:
+            albums[(tags.read(root + b'/' + rel).get('album') or ['(no album tag)'])[0]] += 1
+        except Exception:
+            albums['(unreadable)'] += 1
+    return albums
+
+
+def candidates(db, settings, artist_keys):
+    """For each ambiguous artist: its local albums, and per MusicBrainz candidate
+    the details and release groups needed to pick one by eye. Candidate data is
+    cached ('mb_candidate' rows keyed 'candidate:<mbid>')."""
+    mb = MusicBrainz(settings.user_agent)
+    out = []
+    for key in artist_keys:
+        name, n = db.execute("SELECT name, tracks FROM artists WHERE key=?", (key,)).fetchone()
+        kind, info = identity(db, {'key': key, 'name': name, 'mbid': None})
+        albums = local_albums(db, settings, key)
+        local = {fold(strip_edition(a)) for a in albums}
+        cands = []
+        for c in info if kind == 'ambiguous' else []:
+            ck = f"candidate:{c['id']}"
+            got = cached(db, ck, 'mb_candidate')
+            if got is None:
+                status, art = mb.artist(c['id'])
+                rgs = mb.release_groups(c['id']) if status == 'ok' else []
+                store(db, ck, 'mb_candidate', status, {'artist': art, 'release_groups': rgs})
+                got = cached(db, ck, 'mb_candidate')
+            art, rgs = got[1]['artist'] or {}, got[1]['release_groups']
+            ranked = sorted(art.get('genres') or [], key=lambda g: -g.get('count', 0))
+            cands.append({
+                'mbid': c['id'], 'name': art.get('name', c.get('name')),
+                'disambiguation': art.get('disambiguation') or '', 'country': art.get('country') or '',
+                'type': art.get('type') or '', 'begin': ((art.get('life-span') or {}).get('begin') or '')[:4],
+                'genres': ', '.join(g['name'] for g in ranked[:5]),
+                'release_groups': len(rgs),
+                'matching_albums': [rg['title'] for rg in rgs if fold(strip_edition(rg['title'] or '')) in local],
+                'sample_titles': [f"{rg['title']} ({rg['year']})" for rg in rgs[:6]],
+            })
+        out.append({'key': key, 'artist': name, 'tracks': n, 'status': kind,
+                    'local_albums': dict(albums.most_common()), 'candidates': cands})
     return out
 
 

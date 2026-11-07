@@ -79,6 +79,15 @@ class MusicBrainz:
             raise SourceError(f'MusicBrainz artist {mbid}: HTTP {status}')
         return 'ok', data
 
+    def release_groups(self, mbid):
+        """Titles of the artist's release groups (up to 100), for comparing
+        candidates against the library's albums."""
+        status, data = get_json(f'{self.BASE}/release-group?artist={mbid}&limit=100&fmt=json', self.h, self.limit)
+        if status != 200:
+            raise SourceError(f'MusicBrainz release groups {mbid}: HTTP {status}')
+        return [{'title': rg.get('title'), 'type': rg.get('primary-type'),
+                 'year': (rg.get('first-release-date') or '')[:4]} for rg in data.get('release-groups', [])]
+
     def search(self, name):
         """Exact-name match only. 'ok' needs exactly one artist whose name or
         alias equals the query (case/dash/space-insensitive)."""

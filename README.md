@@ -26,6 +26,7 @@ scan  ->  lookup  ->  resolve  ->  apply (dry run)  ->  apply --apply
 | `rollback --apply` | restores the original genres | **yes** |
 | `override` | manual genres, or pin the MusicBrainz artist for an ambiguous name | no |
 | `identities` | CSV of each artist's MusicBrainz identity and how it was established | no |
+| `candidates` | report on review artists: local albums next to each MusicBrainz candidate's details and releases | no |
 | `status`   | counts from the state DB | no |
 
 Everything is resumable: `scan` re-reads only files whose size/mtime changed,
@@ -274,6 +275,13 @@ $gt override rm "Converge"
 
 Separate genres with `;`. Override genres replace the looked-up result
 entirely. Run `resolve` after changing overrides.
+
+To work through the review list, `candidates` writes `reports/candidates-*.md`:
+for each review artist, its local albums, and for each MusicBrainz candidate
+its type, country, start year, genres, release-group count, a few release
+titles, and which of them match local albums (bolded). Candidate data is
+cached. Pin the right one with `override set --mbid`, then `lookup`,
+`resolve`, `apply`.
 
 ## Docker / Unraid
 
