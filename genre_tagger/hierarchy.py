@@ -8,9 +8,10 @@ Movements trees both map to the Genre tag, so every ::genre leaf is allowed.
 When a hierarchy is loaded, a genre is only ever written if it is in it:
   - exact name (same key() as normalize uses), RYM spelling wins
   - else an alias below ("Punk" -> "Punk Rock", "Thrash" -> "Thrash Metal")
-  - else a bracketed RYM name ("Hardcore" -> "Hardcore [EDM]" or the punk
-    one): returned as Ambiguous, settled per artist by which top-level groups
-    the artist's other genres sit in
+  - a name with bracketed RYM variants ("Hardcore" -> "Hardcore [EDM]" or the
+    punk one; "Trap" -> "Trap" (hip hop) or "Trap [EDM]"): returned as
+    Ambiguous, settled per artist by which top-level groups the artist's
+    other genres sit in
   - else dropped
 Names containing ; / , ("R&B / Soul / Funk") are category nodes and are
 never written, because Navidrome splits on those characters.
@@ -91,9 +92,11 @@ class Hierarchy:
         k = key(raw)
         if k in ALIASES:
             k = key(ALIASES[k])
-        if k in self.names:
-            return BRACKET_DISPLAY.get(self.names[k], self.names[k])
         variants = self.bracketed.get(k)
+        if k in self.names and variants and self.names[k] not in variants:
+            variants = variants + [self.names[k]]  # "Trap" (hip hop) vs "Trap [EDM]": decide by context
+        elif k in self.names:
+            return BRACKET_DISPLAY.get(self.names[k], self.names[k])
         if variants:
             if len(variants) == 1:
                 return BRACKET_DISPLAY.get(variants[0], variants[0])
