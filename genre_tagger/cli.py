@@ -36,7 +36,7 @@ def find_artist(db, ref):
 def cmd_scan(s, db, a):
     if a.from_survey:
         sc.import_survey(db, a.from_survey, s.library)
-    sc.scan(db, s.library, a.workers)
+    sc.scan(db, s.library, a.workers, s.folders)
     sc.assign_keys(db)
 
 
@@ -154,6 +154,8 @@ def main(argv=None):
     p.add_argument('--workers', type=int, help='file I/O threads (env GT_WORKERS, default 2)')
     p.add_argument('--vocab-db', help="follow this state DB's genre spellings, e.g. the library's "
                                       'when tagging an inbox (env GT_VOCAB_DB)')
+    p.add_argument('--folders', help='comma-separated subfolders of the library to scan, e.g. '
+                                     '"inbox,deemix,EAC,slsk" (env GT_FOLDERS; default: all)')
     p.add_argument('--hierarchy', help='MusicBee tag hierarchy file; only its genres are written. '
                                        "Default: bundled RYM hierarchy; 'off' to allow any (env GT_HIERARCHY)")
     sub =p.add_subparsers(dest='cmd', required=True)
@@ -200,7 +202,8 @@ def main(argv=None):
         p.error('override set/rm needs an artist')
     s = load_settings(a.env_file, library=a.library, db=a.db, reports=a.reports,
                       top_n=a.top_n, workers=a.workers, vocab_db=a.vocab_db,
-                      hierarchy=a.hierarchy)
+                      hierarchy=a.hierarchy,
+                      folders=tuple(f.strip() for f in a.folders.split(',') if f.strip()) if a.folders else None)
     if a.cmd == 'scan':
         a.workers = s.workers if a.workers else 4
     db = dbm.connect(s.db)

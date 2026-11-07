@@ -44,6 +44,7 @@ class Settings:
     workers: int
     vocab_db: Path | None = None  # another state DB whose genre spellings to follow (the library's, for an inbox)
     hierarchy: str = ''           # MusicBee tag hierarchy file limiting genres; '' = bundled RYM one, 'off' = none
+    folders: tuple = ()           # subfolders of library to scan; empty = all of it
 
     @property
     def user_agent(self):
@@ -67,6 +68,7 @@ def settings(env_file='.env', **overrides):
         workers=int(e('GT_WORKERS', '2')),
         vocab_db=Path(e('GT_VOCAB_DB')) if e('GT_VOCAB_DB') else None,
         hierarchy=e('GT_HIERARCHY', ''),
+        folders=tuple(f.strip() for f in e('GT_FOLDERS', '').split(',') if f.strip()),
     )
     for k, v in overrides.items():
         if v is not None:

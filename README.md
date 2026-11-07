@@ -56,6 +56,7 @@ Settings come from the environment, then `.env` (the environment wins).
 | `GT_WORKERS` | 2 | file threads for apply/rollback (scan uses 4) |
 | `GT_HIERARCHY` | bundled RYM | MusicBee tag hierarchy file whose genres are the only ones written; `off` allows any |
 | `GT_VOCAB_DB` | – | another state DB whose genre spellings to follow (the library's, when tagging an inbox) |
+| `GT_FOLDERS` | all | comma-separated subfolders of `GT_LIBRARY` to scan, e.g. `inbox,deemix,EAC,slsk` |
 
 A source without credentials is skipped and nothing is cached for it, so adding
 the key later and re-running `lookup` fills it in.
@@ -85,15 +86,20 @@ tracks all have 2+ genres), `--limit N` (first N artists by name), `--artist TEX
 tracks with 2+ genres); `rollback` takes `--artist`.
 `apply` writes whatever the most recent `resolve` produced.
 
-### Testing on a subset
+### Staging folders (new music before it joins the library)
 
-Use a separate DB per library root:
+MusicBee watches several input folders under `Process/Audio`. They share one
+state DB, separate from the library's:
 
 ```sh
-export GT_LIBRARY=/mnt/viridian/media/Process/Audio/inbox GT_DB=test-inbox/inbox.db GT_REPORTS=test-inbox/reports
+export GT_LIBRARY=/mnt/viridian/media/Process/Audio GT_FOLDERS=inbox,deemix,EAC,slsk
+export GT_DB=state/staging.db GT_REPORTS=state/reports-staging
 export GT_VOCAB_DB=state/library.db    # follow the library's spellings
-$gt scan && $gt lookup --limit 25 && $gt resolve --limit 25 && $gt apply --limit 25
+$gt scan && $gt lookup && $gt resolve && $gt apply      # then apply --apply
 ```
+
+`scan` refuses to run if a listed folder is missing, rather than dropping its
+tracks from the DB. `--limit N` on lookup/resolve/apply tests on a few artists.
 
 ### Seeding from a survey
 

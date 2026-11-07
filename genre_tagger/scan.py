@@ -61,11 +61,17 @@ def import_survey(db, survey_path, root):
     print(f'imported {n} tracks from survey' + (f' ({skipped} outside library root ignored)' if skipped else ''))
 
 
-def scan(db, root, workers=4):
+def scan(db, root, workers=4, folders=()):
+    """folders: subfolders of root to scan (all of root when empty), e.g. the
+    staging folders MusicBee watches; tracks outside them leave the DB."""
     root_b = os.fsencode(str(root)).rstrip(b'/')
     known = {r[0]: (r[1], r[2]) for r in db.execute("SELECT relpath, size, mtime FROM tracks")}
     seen, todo = set(), []
-    for d, _, files in os.walk(root_b):
+    tops = [os.path.join(root_b, os.fsencode(f)) for f in folders] or [root_b]
+    missing = [t for t in tops if not os.path.isdir(t)]
+    if missing:  # a typo or unmounted share would otherwise drop those tracks from the DB
+        sys.exit(f'scan: folder(s) not found: {", ".join(os.fsdecode(m) for m in missing)}')
+    for d, _, files in (w for t in tops for w in os.walk(t)):
         for f in files:
             if tags.fmt_of(f) is None:
                 continue
