@@ -21,11 +21,11 @@ import time
 from pathlib import Path
 
 from . import hierarchy
-from .db import loads, now
+from .db import dumps, loads, now
 from .hierarchy import Ambiguous
 from .lookup import cached, identity
 from .normalize import Normalizer, key
-from .scan import split_genres
+from .scan import sparse, split_genres
 
 W = {'mb_genre': 3.0, 'mb_tag': 0.5, 'dg_style': 2.0, 'dg_genre': 0.5, 'lastfm': 2.0, 'existing': 1.0}
 FORBIDDEN = set(';/,')
@@ -145,7 +145,8 @@ def score_artist(db, a, norm, settings, existing):
 
 
 def resolve(db, settings, artists):
-    norm = Normalizer(vocabulary(db, settings.vocab_db), mb_genre_names(db), hierarchy.load(settings.hierarchy))
+    hy = hierarchy.load(settings.hierarchy)
+    norm = Normalizer(vocabulary(db, settings.vocab_db), mb_genre_names(db), hy)
     existing = track_genres(db)
     overrides = {k: (loads(g), note) for k, g, note in
                  db.execute("SELECT artist_key, genres, note FROM overrides WHERE genres IS NOT NULL")}
@@ -180,9 +181,9 @@ def resolve(db, settings, artists):
         bad = [g for g in genres if FORBIDDEN & set(g)]
         if bad:
             genres, status, reason = [], 'review', f'separator in genre name {bad}'
-        # what a default-scope apply would rewrite: 0-1 genre tracks and this tool's own writes
+        # what apply would rewrite: sparse tracks (all with include_multi) and this tool's own writes
         n_change = sum(1 for g, wrote in ex[2]
-                       if g != genres and (wrote or len(split_genres(g)) <= 1)) if genres else 0
+                       if g != genres and (wrote or settings.include_multi or sparse(dumps(g), hy))) if genres else 0
         results.append({**a, 'genres': genres, 'scores': dict(scores), 'status': status, 'reason': reason,
                         'contrib': dict(contrib), 'n_change': n_change,
                         'dropped': {g: s for g, s in dropped.items() if s >= settings.min_score}})

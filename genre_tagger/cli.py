@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import apply as ap
 from . import db as dbm
+from . import hierarchy as hy
 from . import lookup as lk
 from . import resolve as rs
 from . import scan as sc
@@ -41,12 +42,12 @@ def cmd_scan(s, db, a):
 
 
 def cmd_lookup(s, db, a):
-    artists = sc.select_artists(db, a.include_multi, a.limit, a.artist)
+    artists = sc.select_artists(db, s.include_multi, a.limit, a.artist, hy.load(s.hierarchy))
     lk.run(s, artists, a.sources.split(','))
 
 
 def cmd_resolve(s, db, a):
-    artists = sc.select_artists(db, a.include_multi, a.limit, a.artist)
+    artists = sc.select_artists(db, s.include_multi, a.limit, a.artist, hy.load(s.hierarchy))
     results = rs.resolve(db, s, artists)
     proposals, review, unkeyed = rs.write_reports(db, results, s.reports)
     by = collections.Counter(r['status'] for r in results)
@@ -78,7 +79,7 @@ def _run(s, db, a, targets, kind):
     print(f'{len(targets)} tracks across {n_artists} artists to change; plan: {plan}')
     marker_only = sum(1 for _, target, _, cur, _ in targets if kind == 'apply' and cur == target)
     if marker_only:
-        print(f'  of which {marker_only} only need the {tags.MARKER} marker (genre already written earlier)')
+        print(f'  of which {marker_only} only need the {tags.MARKER} marker (genre already correct)')
     if not a.apply:
         print('dry run: nothing written. Re-run with --apply to write.')
         return
@@ -97,7 +98,8 @@ def _run(s, db, a, targets, kind):
 def cmd_apply(s, db, a):
     if not db.execute("SELECT 1 FROM resolved LIMIT 1").fetchone():
         sys.exit('nothing resolved yet: run resolve first')
-    _run(s, db, a, ap.apply_targets(db, a.artist, a.limit, a.include_multi), 'apply')
+    _run(s, db, a, ap.apply_targets(db, a.artist, a.limit, s.include_multi,
+                                       hy.load(s.hierarchy)), 'apply')
 
 
 def cmd_rollback(s, db, a):
@@ -220,6 +222,8 @@ def main(argv=None):
                       top_n=a.top_n, workers=a.workers, vocab_db=a.vocab_db,
                       hierarchy=a.hierarchy,
                       folders=tuple(f.strip() for f in a.folders.split(',') if f.strip()) if a.folders else None)
+    if getattr(a, 'include_multi', False):
+        s.include_multi = True
     if a.cmd == 'scan':
         a.workers = s.workers if a.workers else 4
     db = dbm.connect(s.db)

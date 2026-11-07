@@ -58,6 +58,7 @@ Settings come from the environment, then `.env` (the environment wins).
 | `GT_HIERARCHY` | bundled RYM | MusicBee tag hierarchy file whose genres are the only ones written; `off` allows any |
 | `GT_VOCAB_DB` | – | another state DB whose genre spellings to follow (the library's, when tagging an inbox) |
 | `GT_FOLDERS` | all | comma-separated subfolders of `GT_LIBRARY` to scan, e.g. `inbox,deemix,EAC,slsk` |
+| `GT_INCLUDE_MULTI` | off | `1` = always behave as `--include-multi` (staging: downloads only carry source genres) |
 
 A source without credentials is skipped and nothing is cached for it, so adding
 the key later and re-running `lookup` fills it in.
@@ -79,7 +80,12 @@ $gt rollback --apply               # restore originals
 Default scope is judged per track: an artist is in scope when any of its
 tracks has 0-1 genres (or the tool has written to it before), and `apply`
 writes only those 0-1 genre tracks plus the tool's own earlier writes. Tracks
-you already gave 2+ genres are left alone.
+you already gave 2+ genres are left alone. With a hierarchy, only genres in it
+count toward that, after aliases and de-duplication: a source bucket like
+Deezer's `Rap/Hip Hop` or `Alternative; Rock` is one genre, not a curated pair.
+
+Tracks that already hold exactly the proposed genres get the `GENRETAGGER`
+marker too, so an empty marker means "not confirmed by the tool".
 
 Scope flags for `lookup` / `resolve`: `--include-multi` (also artists whose
 tracks all have 2+ genres), `--limit N` (first N artists by name), `--artist TEXT`.
@@ -95,6 +101,7 @@ state DB, separate from the library's:
 ```sh
 export GT_LIBRARY=/mnt/viridian/media/Process/Audio GT_FOLDERS=inbox,deemix,EAC,slsk
 export GT_DB=state/staging.db GT_REPORTS=state/reports-staging
+export GT_INCLUDE_MULTI=1              # downloads only carry the source's genres: replace them
 export GT_VOCAB_DB=state/library.db    # follow the library's spellings
 $gt scan && $gt lookup && $gt resolve && $gt apply      # then apply --apply
 ```

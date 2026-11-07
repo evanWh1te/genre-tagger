@@ -168,19 +168,25 @@ def assign_keys(db):
           f'{unkeyed} tracks with no artist tag')
 
 
-def sparse(genre_json):
-    """A track is in the default scope when it has at most one genre."""
-    return len(split_genres(json.loads(genre_json) if genre_json else None)) <= 1
+def sparse(genre_json, hierarchy=None):
+    """A track is in the default scope when it has at most one genre. With a
+    hierarchy, only genres in it count (after aliases, de-duplicated): source
+    buckets like Deezer's "Rap/Hip Hop" or "Alternative; Rock" are one genre,
+    not a curated pair."""
+    genres = split_genres(json.loads(genre_json) if genre_json else None)
+    if hierarchy is not None:
+        genres = {h for h in map(hierarchy.lookup, genres) if h is not None}
+    return len(genres) <= 1
 
 
-def select_artists(db, include_multi=False, limit=None, artist=None):
+def select_artists(db, include_multi=False, limit=None, artist=None, hierarchy=None):
     """Artists in scope, by name. Default scope: artists with at least one
     track holding 0-1 genres (judged per track: an artist whose albums carry
     different single genres still has sparse tracks to fill), plus artists
     this tool already wrote to, so they stay resolved."""
     has_sparse = {k for k, g, w in db.execute(
         """SELECT t.artist_key, t.genre, w.relpath FROM tracks t LEFT JOIN writes w ON w.relpath = t.relpath
-           WHERE t.artist_key IS NOT NULL""") if w is not None or sparse(g)}
+           WHERE t.artist_key IS NOT NULL""") if w is not None or sparse(g, hierarchy)}
     rows = db.execute("SELECT key, name, mbid, tracks, current FROM artists ORDER BY name COLLATE NOCASE").fetchall()
     out = []
     for key, name, mbid, n, current in rows:

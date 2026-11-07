@@ -45,6 +45,7 @@ class Settings:
     vocab_db: Path | None = None  # another state DB whose genre spellings to follow (the library's, for an inbox)
     hierarchy: str = ''           # MusicBee tag hierarchy file limiting genres; '' = bundled RYM one, 'off' = none
     folders: tuple = ()           # subfolders of library to scan; empty = all of it
+    include_multi: bool = False   # overwrite tracks that already have 2+ genres (staging: source genres only)
 
     @property
     def user_agent(self):
@@ -69,6 +70,7 @@ def settings(env_file='.env', **overrides):
         vocab_db=Path(e('GT_VOCAB_DB')) if e('GT_VOCAB_DB') else None,
         hierarchy=e('GT_HIERARCHY', ''),
         folders=tuple(f.strip() for f in e('GT_FOLDERS', '').split(',') if f.strip()),
+        include_multi=e('GT_INCLUDE_MULTI', '').lower() in ('1', 'true', 'yes', 'on'),
     )
     for k, v in overrides.items():
         if v is not None:
